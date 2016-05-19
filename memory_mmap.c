@@ -10,6 +10,7 @@
 
 #define VIRTUAL_MEMORY_CHUNK 4*1024*1024
 #define NUM_PROCESSORS  4
+#define SLEEP_PER_ITER_IN_SEC 10
 
 void* put_pressure_on_mem (void* args);
 void check_my_affinity(void);
@@ -42,12 +43,16 @@ void check_my_affinity(void)
 
   pthread_t thread;
   cpu_set_t cpus;
+  int index=0;
 
   CPU_ZERO(&cpus);
   thread = pthread_self();
   pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpus);
-  printf("My affinity 0x%x\n", cpus);  
 
+  for (index =0; index < NUM_PROCESSORS; index++) {
+      if (CPU_ISSET(index, &cpus))
+          printf("Thread running on processor %d\n", index);
+  }
 }
 
 void* put_pressure_on_mem (void* args)
@@ -62,14 +67,14 @@ void* put_pressure_on_mem (void* args)
     check_my_affinity();
 
     while (loop) {
-        sleep(10);
+        sleep(SLEEP_PER_ITER_IN_SEC);
         memory = mmap (NULL, VIRTUAL_MEMORY_CHUNK, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_SHARED, -1, 0);
         if (memory == MAP_FAILED) {
            printf("memory allocation failed \n");
            printf("last error %x\n", errno);
            return 0;
         } else {
-           printf("allocated 20 MB of virtual space\n");
+           printf("allocated %x MB of virtual space\n", VIRTUAL_MEMORY_CHUNK/(1024*1024));
            printf("memory address %lx\n", memory);
         }
 
@@ -78,7 +83,7 @@ void* put_pressure_on_mem (void* args)
            free(memory);
            continue;
         } else {
-           printf("mlocked %x MB of virtual space \n", VIRTUAL_MEMORY_CHUNK);
+           printf("mlocked %x MB of virtual space \n", VIRTUAL_MEMORY_CHUNK/(1024*1024));
         }
 
         memset(memory, 0, VIRTUAL_MEMORY_CHUNK);
