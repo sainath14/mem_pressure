@@ -1,21 +1,64 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <errno.h>
+#include <pthread.h>
 
-#define VIRTUAL_MEMORY_CHUNK 512*1024*1024
+#include <sched.h>
+
+#define VIRTUAL_MEMORY_CHUNK 4*1024*1024
 #define NUM_PROCESSORS  4
+
+void* put_pressure_on_mem (void* args);
+void check_my_affinity(void);
 
 int main (int argc, char *argv[])
 {
 
+  pthread_t threads[NUM_PROCESSORS];
+  pthread_attr_t attr;
+  cpu_set_t cpus;
+  int index;
+
+  pthread_attr_init(&attr);
+
+
+  for (index = 0; index < NUM_PROCESSORS; index++) {
+      CPU_ZERO(&cpus);
+      CPU_SET(index, &cpus);
+      pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpus);
+      pthread_create(&threads[index], &attr, put_pressure_on_mem, NULL);
+  }
+
+  for (index = 0; index < NUM_PROCESSORS; index++) {
+      pthread_join(threads[index], NULL);
+  }
+}
+
+void check_my_affinity(void)
+{
+
+  pthread_t thread;
+  cpu_set_t cpus;
+
+  thread = pthread_self();
+  pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpus);
+  printf("My affinity 0x%x\n", cpus);  
+
+}
+
+void* put_pressure_on_mem (void* args)
+{
     void * memory;
     volatile int loop = 1;
     int num_64byte_lines = 0;
     int line;
 
     srand(0);
+
+    check_my_affinity();
 
     while (loop) {
         sleep(10);
@@ -34,7 +77,7 @@ int main (int argc, char *argv[])
            free(memory);
            continue;
         } else {
-           printf("mlocked 512 MB of virtual space \n");
+           printf("mlocked %x MB of virtual space \n", VIRTUAL_MEMORY_CHUNK);
         }
 
         memset(memory, 0, VIRTUAL_MEMORY_CHUNK);
